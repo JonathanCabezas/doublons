@@ -1,4 +1,3 @@
-import re
 import hashlib
 import argparse
 from shorten_regex import ShortenRegex
@@ -37,9 +36,16 @@ shorten_regex = ShortenRegex(suffixes)
 hash_to_locations = {}
 files_to_handle = set()
 number_of_duplicates = 0
+number_of_files_to_shorten = 0
+
+renamings = []
+deletions = []
 
 DRY_RUN = False
 INTERACTIVE = False
+
+if not (trash := Path("trash")).exists():
+    trash.mkdir()
 
 
 def hash(file_path):
@@ -57,8 +63,7 @@ def compute_hashes():
 
 
 def handle_duplicates():
-    global files_to_handle
-    global number_of_duplicates
+    global files_to_handle, number_of_duplicates, renamings, deletions
 
     for hash, name_to_locations in hash_to_locations.items():
         # If there are multiple locations for the same hash, we have duplicates
@@ -102,29 +107,64 @@ def handle_duplicates():
 
         # When we have the original name, we check if the file already exists
         if original not in name_to_locations:
-            print(f"Creating the file {Path(original)}")
+            location = name_to_locations.popitem()[1]
+            print(f"Renaming the file {location} -> {Path(original)}")
+            renamings.append((location, location.with_name(original)))
         else:
             print(f"Keeping the file {name_to_locations[original]}")
             del name_to_locations[original]
 
         for location in name_to_locations.values():
-            print(f"Removing the file {location}")
-            if not DRY_RUN:
-                location.unlink()
+            print(f"Moving the file {location} to trash")
+            deletions.append(location)
 
         print()
 
 
 def shorten_names_of_other_files():
+    global renamings, number_of_files_to_shorten
     print("\n> Shortening names of other files...\n")
 
     for f in files_to_handle:
         shorter_name = shorten_regex.shorten(f.name)
 
         if shorter_name:
+            number_of_files_to_shorten += 1
             print(f"Renaming {f} to {f.with_name(shorter_name)}")
-            if not DRY_RUN:
-                f.rename(f.with_name(shorter_name))
+            renamings.append((f, f.with_name(shorter_name)))
+
+
+def summarize():
+    print(f"\n> Summary:\n")
+    print(f"    Number of duplicates: {number_of_duplicates}")
+    print(f"    Number of files to shorten: {number_of_files_to_shorten}")
+    print(f"    Number of files to delete: {len(deletions)}")
+    print(f"    Number of files to rename: {len(renamings)}")
+
+
+def apply_changes():
+    if DRY_RUN:
+        return
+
+    while True:
+        print("\nAre you sure you want to continue (yes/NO)? ")
+        choice = input().lower() or "no"
+        if choice in ["yes", "no"]:
+            break
+
+    if choice == "no":
+        input("Aborting...")
+        return
+
+    for old, new in renamings:
+        old.rename(new)
+
+    for f in deletions:
+        f.rename(Path("trash") / f.name)
+        # location.unlink()
+
+    print("Files have been renamed and moved to trash")
+    input("Press any key to exit...")
 
 
 if __name__ == "__main__":
@@ -142,3 +182,5 @@ if __name__ == "__main__":
     compute_hashes()
     handle_duplicates()
     shorten_names_of_other_files()
+    summarize()
+    apply_changes()
