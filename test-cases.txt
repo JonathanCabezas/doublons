@@ -1,0 +1,7 @@
+In playground, here are what the files test:
+
+* a is a normal file
+* b (1) is present twice with the same name
+* c is present twice with different names
+* d is alone with a name to shorten
+* e is present a lot of times

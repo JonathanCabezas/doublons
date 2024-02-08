@@ -21,7 +21,9 @@ It will also change the name of the files to remove the suffixes, for example:
 - test (2).txt -> test.txt
 Even if the files don't have duplicates.
 """
-parser = argparse.ArgumentParser(description=description)
+parser = argparse.ArgumentParser(
+    description=description, formatter_class=argparse.RawTextHelpFormatter
+)
 parser.add_argument(
     "--dry-run", action="store_true", help="List duplicate files without removing them"
 )
@@ -30,22 +32,24 @@ parser.add_argument(
     action="store_true",
     help="Ask the user to choose which file to keep when there are multiple possible names",
 )
+parser.add_argument(
+    "--suffixes",
+    nargs="+",
+    help="List of suffixes to remove from the files",
+    default=suffixes,
+)
+
+args = None
 
 # Global variables
 shorten_regex = ShortenRegex(suffixes)
 hash_to_locations = {}
-files_to_handle = set()
+files_to_handle = set([f for f in Path(".").glob("**/*") if f.is_file()])
 number_of_duplicates = 0
 number_of_files_to_shorten = 0
 
 renamings = []
 deletions = []
-
-DRY_RUN = False
-INTERACTIVE = False
-
-if not (trash := Path("trash")).exists():
-    trash.mkdir()
 
 
 def hash(file_path):
@@ -54,69 +58,117 @@ def hash(file_path):
 
 
 def compute_hashes():
-    for f in Path(".").glob("**/*"):
-        if not f.is_file():
-            continue
+    n = len(files_to_handle)
+    print(f"    Number of files found: {n}")
 
-        files_to_handle.add(f)
-        hash_to_locations.setdefault(hash(f), {})[f.name] = f
+    for i, f in enumerate(files_to_handle):
+        h = hash(f)
+        hash_to_locations.setdefault(h, []).append(f)
+        print(f"    ({i+1}/{n}) Hash of {f} is {h}", end="\r")
+
+    print("\n")
+
+
+def automatic_choice(posibles_names):
+    # If a name starts with "IMG" or "VID", we choose it
+    for i, p in enumerate(posibles_names):
+        if p.startswith("IMG") or p.startswith("VID"):
+            return i
+
+    return 0
+
+
+def rename(location, new_location):
+    global renamings
+    print(f"    Renaming the file '{location}' -> '{new_location}'")
+    renamings.append((location, new_location))
+
+
+def delete(location):
+    global deletions
+    print(f"    Moving the file '{location}' to trash")
+    deletions.append(location)
 
 
 def handle_duplicates():
     global files_to_handle, number_of_duplicates, renamings, deletions
 
-    for hash, name_to_locations in hash_to_locations.items():
+    for hash, locations in hash_to_locations.items():
         # If there are multiple locations for the same hash, we have duplicates
-        if len(name_to_locations) == 1:
+        if len(locations) == 1:
             continue
 
-        number_of_duplicates += len(name_to_locations) - 1
+        print(f"> Hash {hash} has duplicates:\n")
+        number_of_duplicates += len(locations) - 1
+        files_to_handle -= set(locations)
 
-        files_to_handle -= set(name_to_locations.values())
         # We shorten the names of the duplicate files to find all the possible original names
         posibles_names = []
+        for location in locations:
+            name = location.name
+            if name in posibles_names:
+                continue
 
-        for name in name_to_locations.keys():
             shorter_name = shorten_regex.shorten(name)
             if shorter_name:
                 name = shorter_name
 
             posibles_names.append(name)
-
         posibles_names = sorted(posibles_names)
-        original = posibles_names[0]
+        choice = 0
 
         # If there are multiple possible names, we need to make a choice
         if any(posibles_names[0] != p for p in posibles_names):
-            print(f"Hash {hash} has multiple posibles_names:")
+            print(f"  There are multiple posibles_names:")
             for i, p in enumerate(posibles_names):
-                print(f" {i+1} - {p}")
+                print(f"    {i+1} - {p}")
 
-            if INTERACTIVE:
+            if args.interactive:
                 while True:
                     try:
-                        choice = input(f"Please choose the correct one (1):")
+                        choice = input(f"  Please choose the correct one (1):")
                         if choice:
                             choice = int(choice) - 1
-                            original = posibles_names[choice]
+                            if choice < 0 or choice >= len(posibles_names):
+                                raise ValueError
                         break
                     except:
                         pass
             else:
-                print("Choosing the first one in alphabetical order")
+                choice = automatic_choice(posibles_names)
+            print()
+
+        original = posibles_names[choice]
+        print(f"  Choosing the name '{original}' as the original name\n")
+
+        # We detect files with the same name
+        name_to_locations = {}
+        for location in locations:
+            name = location.name
+            if name in name_to_locations:
+                print(
+                    f"  The file '{location}' has the same name as '{name_to_locations[name]}'\n"
+                )
+                if location < name_to_locations[name]:
+                    delete(name_to_locations[name])
+                else:
+                    delete(location)
+                    continue
+
+            name_to_locations[name] = location
 
         # When we have the original name, we check if the file already exists
         if original not in name_to_locations:
             location = name_to_locations.popitem()[1]
-            print(f"Renaming the file {location} -> {Path(original)}")
-            renamings.append((location, location.with_name(original)))
+            new_location = Path(original)
+            rename(location, new_location)
         else:
-            print(f"Keeping the file {name_to_locations[original]}")
+            print(f"    Keeping the file '{name_to_locations[original]}'")
             del name_to_locations[original]
 
+        # Deleting all the other files
         for location in name_to_locations.values():
-            print(f"Moving the file {location} to trash")
-            deletions.append(location)
+            delete(location)
 
         print()
 
@@ -130,8 +182,7 @@ def shorten_names_of_other_files():
 
         if shorter_name:
             number_of_files_to_shorten += 1
-            print(f"Renaming {f} to {f.with_name(shorter_name)}")
-            renamings.append((f, f.with_name(shorter_name)))
+            rename(f, f.with_name(shorter_name))
 
 
 def summarize():
@@ -143,7 +194,7 @@ def summarize():
 
 
 def apply_changes():
-    if DRY_RUN:
+    if args.dry_run:
         return
 
     while True:
@@ -153,8 +204,10 @@ def apply_changes():
             break
 
     if choice == "no":
-        input("Aborting...")
         return
+
+    if not (trash := Path("trash")).exists():
+        trash.mkdir()
 
     for old, new in renamings:
         old.rename(new)
@@ -164,7 +217,11 @@ def apply_changes():
         # location.unlink()
 
     print("Files have been renamed and moved to trash")
+
+
+def quit():
     input("Press any key to exit...")
+    exit(0)
 
 
 if __name__ == "__main__":
@@ -173,14 +230,17 @@ if __name__ == "__main__":
 
     if args.dry_run:
         print("    --- Dry run ---\n")
-        DRY_RUN = True
 
     if args.interactive:
         print("    --- Interactive mode ---\n")
-        INTERACTIVE = True
+
+    if args.suffixes:
+        suffixes = args.suffixes
+        print(f"    Suffixes: {suffixes}\n")
 
     compute_hashes()
     handle_duplicates()
     shorten_names_of_other_files()
     summarize()
     apply_changes()
+    quit()
