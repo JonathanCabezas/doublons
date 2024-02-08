@@ -48,7 +48,7 @@ files_to_handle = set([f for f in Path(".").glob("**/*") if f.is_file()])
 number_of_duplicates = 0
 number_of_files_to_shorten = 0
 
-renamings = []
+renamings = {}
 deletions = []
 
 
@@ -78,13 +78,19 @@ def automatic_choice(posibles_names):
     return 0
 
 
-def rename(location, new_location):
+def schedule_renaming(location, new_location):
     global renamings
+    if new_location.exists() or new_location in renamings.values():
+        print(
+            f"    The file '{new_location}' already exists with different content than '{location}'"
+        )
+        print(f"    Keeping the file '{location}'")
+        return
     print(f"    Renaming the file '{location}' -> '{new_location}'")
-    renamings.append((location, new_location))
+    renamings[location] = new_location
 
 
-def delete(location):
+def schedule_deletion(location):
     global deletions
     print(f"    Moving the file '{location}' to trash")
     deletions.append(location)
@@ -150,9 +156,9 @@ def handle_duplicates():
                     f"  The file '{location}' has the same name as '{name_to_locations[name]}'\n"
                 )
                 if location < name_to_locations[name]:
-                    delete(name_to_locations[name])
+                    schedule_deletion(name_to_locations[name])
                 else:
-                    delete(location)
+                    schedule_deletion(location)
                     continue
 
             name_to_locations[name] = location
@@ -161,14 +167,14 @@ def handle_duplicates():
         if original not in name_to_locations:
             location = name_to_locations.popitem()[1]
             new_location = Path(original)
-            rename(location, new_location)
+            schedule_renaming(location, new_location)
         else:
             print(f"    Keeping the file '{name_to_locations[original]}'")
             del name_to_locations[original]
 
         # Deleting all the other files
         for location in name_to_locations.values():
-            delete(location)
+            schedule_deletion(location)
 
         print()
 
@@ -182,7 +188,7 @@ def shorten_names_of_other_files():
 
         if shorter_name:
             number_of_files_to_shorten += 1
-            rename(f, f.with_name(shorter_name))
+            schedule_renaming(f, f.with_name(shorter_name))
 
 
 def summarize():
@@ -209,7 +215,7 @@ def apply_changes():
     if not (trash := Path("trash")).exists():
         trash.mkdir()
 
-    for old, new in renamings:
+    for old, new in renamings.items():
         old.rename(new)
 
     for f in deletions:
