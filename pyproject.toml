@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "doublons"
-version = "0.1.0"
+version = "1.0.0"
 description = "Find duplicate files in your file system (same content)."
 authors = ["Jonathan Cabezas <jonathan.cabezas.lyon@gmail.com>"]
 readme = "README.md"

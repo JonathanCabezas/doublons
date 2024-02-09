@@ -2,8 +2,10 @@ import re
 import hashlib
 import argparse
 import igittigitt
-from shorten_regex import ShortenRegex
+import importlib.metadata
+
 from pathlib import Path
+from shorten_regex import ShortenRegex
 
 # Parameters
 suffixes = [" - Copie", " \(\d+\)"]
@@ -44,6 +46,16 @@ parser.add_argument(
     "--no-input-before-exit",
     action="store_true",
     help="Don't wait for the user to press a key before exiting the program",
+)
+parser.add_argument(
+    "--version",
+    action="version",
+    version=f"%(prog)s {importlib.metadata.version('doublons')}",
+    help="Show the version",
+)
+# Positional argument
+parser.add_argument(
+    "directory", nargs="?", default=".", help="The directory to search for duplicates"
 )
 
 # Global variables
