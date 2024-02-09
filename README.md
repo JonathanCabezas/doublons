@@ -1,6 +1,6 @@
 # Duplicate Finder (v1)
 
-This program finds duplicates files in a directory and removes them.
+This program finds duplicates files (hash-based) in a directory and removes them.
 For example, if you have the following files:
 
 - test.txt

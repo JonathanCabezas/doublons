@@ -30,29 +30,26 @@ parser.add_argument(
     "--dry-run", action="store_true", help="List duplicate files without removing them"
 )
 parser.add_argument(
-    "--interactive",
-    action="store_true",
-    help="Ask the user to choose which file to keep when there are multiple possible names",
-)
-parser.add_argument(
     "--suffixes",
     nargs="+",
     help="List of suffixes to remove from the files",
     default=suffixes,
 )
-
-args = None
+parser.add_argument(
+    "--choose-original-name",
+    action="store_true",
+    help="Ask the user to choose the original name of the file when there are multiple possible names",
+)
+parser.add_argument(
+    "--no-input-before-exit",
+    action="store_true",
+    help="Don't wait for the user to press a key before exiting the program",
+)
 
 # Global variables
 shorten_regex = ShortenRegex(suffixes)
 hash_to_locations = {}
-files_to_handle = set(
-    [
-        f
-        for f in Path(".").glob("**/*")
-        if f.is_file() and not ignore_parser.match(f)
-    ]
-)
+files_to_handle = None
 number_of_duplicates = 0
 number_of_files_to_shorten = 0
 
@@ -65,7 +62,15 @@ def hash(file_path):
         return hashlib.file_digest(f, "sha1").hexdigest()
 
 
-def compute_hashes():
+def compute_hashes(**kwargs):
+    global files_to_handle
+    files_to_handle = set(
+        [
+            f
+            for f in Path(".").glob("**/*")
+            if f.is_file() and not ignore_parser.match(f)
+        ]
+    )
     n = len(files_to_handle)
     print(f"    Number of files to handle: {n}")
 
@@ -110,7 +115,7 @@ def schedule_deletion(location):
     deletions[new_location] = location
 
 
-def handle_duplicates():
+def handle_duplicates(choose_original_name=False, **kwargs):
     global files_to_handle, number_of_duplicates, renamings, deletions
 
     for hash, locations in hash_to_locations.items():
@@ -143,7 +148,7 @@ def handle_duplicates():
             for i, p in enumerate(posibles_names):
                 print(f"    {i+1} - {p}")
 
-            if args.interactive:
+            if choose_original_name:
                 while True:
                     try:
                         choice = input(f"  Please choose the correct one (1):")
@@ -193,7 +198,7 @@ def handle_duplicates():
         print()
 
 
-def shorten_names_of_other_files():
+def shorten_names_of_other_files(**kwargs):
     global renamings, number_of_files_to_shorten
     print("\n> Shortening names of other files...\n")
 
@@ -205,7 +210,7 @@ def shorten_names_of_other_files():
             schedule_renaming(f, f.with_name(shorter_name))
 
 
-def summarize():
+def summarize(**kwargs):
     print(f"\n> Summary:\n")
     print(f"    Number of duplicates: {number_of_duplicates}")
     print(f"    Number of files to shorten: {number_of_files_to_shorten}")
@@ -213,10 +218,11 @@ def summarize():
     print(f"    Number of files to rename: {len(renamings)}")
 
 
-def apply_changes(confirm=True):
-    if args.dry_run:
+def apply_changes(dry_run=False, confirm=True, **kwargs):
+    if dry_run:
         return
 
+    choice = "yes"
     while True and confirm:
         print("\nAre you sure you want to continue (yes/NO)? ")
         choice = input().lower() or "no"
@@ -239,18 +245,18 @@ def apply_changes(confirm=True):
     print("Files have been renamed and moved to trash")
 
 
-def quit():
-    input("Press any key to exit...")
+def quit(input_before_exit=True, **kwargs):
+    if input_before_exit:
+        input("Press any key to exit...")
     exit(0)
 
 
-def delete_duplicates(confirm=True):
-    compute_hashes()
-    handle_duplicates()
-    shorten_names_of_other_files()
-    summarize()
-    apply_changes(confirm)
-    quit()
+def delete_duplicates(**config):
+    compute_hashes(**config)
+    handle_duplicates(**config)
+    shorten_names_of_other_files(**config)
+    summarize(**config)
+    apply_changes(**config)
 
 
 if __name__ == "__main__":
@@ -260,11 +266,16 @@ if __name__ == "__main__":
     if args.dry_run:
         print("    --- Dry run ---\n")
 
-    if args.interactive:
-        print("    --- Interactive mode ---\n")
-
     if args.suffixes:
         suffixes = args.suffixes
         print(f"    Suffixes: {suffixes}\n")
 
-    delete_duplicates()
+    config = {
+        "confirm": True,
+        "dry_run": args.dry_run,
+        "input_before_exit": not args.no_input_before_exit,
+        "choose_original_name": args.choose_original_name,
+    }
+
+    delete_duplicates(**config)
+    quit(**config)
