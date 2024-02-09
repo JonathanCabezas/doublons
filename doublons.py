@@ -1,12 +1,14 @@
+import re
 import hashlib
 import argparse
+import igittigitt
 from shorten_regex import ShortenRegex
 from pathlib import Path
 
-# TODO compile regexes
-
 # Parameters
 suffixes = [" - Copie", " \(\d+\)"]
+ignore_parser = igittigitt.IgnoreParser()
+ignore_parser.parse_rule_file(Path("ignorelist"))
 
 
 # A multiple lines string description with an example of the program
@@ -44,12 +46,18 @@ args = None
 # Global variables
 shorten_regex = ShortenRegex(suffixes)
 hash_to_locations = {}
-files_to_handle = set([f for f in Path(".").glob("**/*") if f.is_file()])
+files_to_handle = set(
+    [
+        f
+        for f in Path(".").glob("**/*")
+        if f.is_file() and not ignore_parser.match(f)
+    ]
+)
 number_of_duplicates = 0
 number_of_files_to_shorten = 0
 
 renamings = {}
-deletions = []
+deletions = {}
 
 
 def hash(file_path):
@@ -59,7 +67,7 @@ def hash(file_path):
 
 def compute_hashes():
     n = len(files_to_handle)
-    print(f"    Number of files found: {n}")
+    print(f"    Number of files to handle: {n}")
 
     for i, f in enumerate(files_to_handle):
         h = hash(f)
@@ -80,20 +88,26 @@ def automatic_choice(posibles_names):
 
 def schedule_renaming(location, new_location):
     global renamings
-    if new_location.exists() or new_location in renamings.values():
+    if new_location.exists() or new_location in renamings:
         print(
             f"    The file '{new_location}' already exists with different content than '{location}'"
         )
         print(f"    Keeping the file '{location}'")
         return
     print(f"    Renaming the file '{location}' -> '{new_location}'")
-    renamings[location] = new_location
+    renamings[new_location] = location
+
+
+def ensure(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def schedule_deletion(location):
     global deletions
-    print(f"    Moving the file '{location}' to trash")
-    deletions.append(location)
+    new_location = Path("Trash") / location
+    print(f"    Moving the file '{location}' to '{new_location}'")
+    deletions[new_location] = location
 
 
 def handle_duplicates():
@@ -199,11 +213,11 @@ def summarize():
     print(f"    Number of files to rename: {len(renamings)}")
 
 
-def apply_changes():
+def apply_changes(confirm=True):
     if args.dry_run:
         return
 
-    while True:
+    while True and confirm:
         print("\nAre you sure you want to continue (yes/NO)? ")
         choice = input().lower() or "no"
         if choice in ["yes", "no"]:
@@ -215,11 +229,11 @@ def apply_changes():
     if not (trash := Path("trash")).exists():
         trash.mkdir()
 
-    for old, new in renamings.items():
+    for new, old in renamings.items():
         old.rename(new)
 
-    for f in deletions:
-        f.rename(Path("trash") / f.name)
+    for new, old in deletions.items():
+        old.rename(ensure(new))
         # location.unlink()
 
     print("Files have been renamed and moved to trash")
@@ -228,6 +242,15 @@ def apply_changes():
 def quit():
     input("Press any key to exit...")
     exit(0)
+
+
+def delete_duplicates(confirm=True):
+    compute_hashes()
+    handle_duplicates()
+    shorten_names_of_other_files()
+    summarize()
+    apply_changes(confirm)
+    quit()
 
 
 if __name__ == "__main__":
@@ -244,9 +267,4 @@ if __name__ == "__main__":
         suffixes = args.suffixes
         print(f"    Suffixes: {suffixes}\n")
 
-    compute_hashes()
-    handle_duplicates()
-    shorten_names_of_other_files()
-    summarize()
-    apply_changes()
-    quit()
+    delete_duplicates()

@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "doublons"
+version = "0.1.0"
+description = "Find duplicate files in your file system (same content)."
+authors = ["Jonathan Cabezas <jonathan.cabezas.lyon@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+igittigitt = "^2.1.4"
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,4 +1,4 @@
-# Duplicate Finder
+# Duplicate Finder (v1)
 
 This program finds duplicates files in a directory and removes them.
 For example, if you have the following files:
@@ -15,3 +15,9 @@ It will also change the name of the files to remove the suffixes, for example:
 - test (2).txt -> test.txt
 
 Even if the files don't have duplicates.
+
+# TODOS
+
+- Add pytest and test the playground result correctly.
+- Compile all the regexes for better performances.
+- Add `**` support for the ignore list.
