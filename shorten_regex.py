@@ -7,11 +7,11 @@ class ShortenRegex:
     """
 
     def __init__(self, matches):
-        self.regexes = [f"(.*){match}(\..*)" for match in matches]
+        self.regexes = [re.compile(f"(.*){match}(\..*)") for match in matches]
 
     def shorten_once(self, str):
         for regex in self.regexes:
-            if m := re.search(regex, str):
+            if m := regex.search(str):
                 return "".join(m.groups())
 
         return None

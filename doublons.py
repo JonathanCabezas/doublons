@@ -1,16 +1,34 @@
 import re
+import logging
 import hashlib
 import argparse
 import igittigitt
-import importlib.metadata
 
+from sys import exit
 from pathlib import Path
 from shorten_regex import ShortenRegex
 
 # Parameters
+VERSION = "1.0.1"
+
 suffixes = [" - Copie", " \(\d+\)"]
 ignore_parser = igittigitt.IgnoreParser()
-ignore_parser.parse_rule_file(Path("ignorelist"))
+ignore_parser.parse_rule_file(Path(__file__).parent / Path("ignorelist"))
+
+logger = None
+
+
+def _print(msg="", *args, **kwargs):
+    if logger:
+        logger.info(msg)
+    print(msg, *args, **kwargs)
+
+
+def setup_logs():
+    global logger
+    # Setup the logger
+    logging.basicConfig(filename="doublons.log", level=logging.INFO)
+    logger = logging.getLogger("doublons")
 
 
 # A multiple lines string description with an example of the program
@@ -50,9 +68,10 @@ parser.add_argument(
 parser.add_argument(
     "--version",
     action="version",
-    version=f"%(prog)s {importlib.metadata.version('doublons')}",
+    version=f"%(prog)s {VERSION}",
     help="Show the version",
 )
+
 # Positional argument
 parser.add_argument(
     "directory", nargs="?", default=".", help="The directory to search for duplicates"
@@ -74,24 +93,20 @@ def hash(file_path):
         return hashlib.file_digest(f, "sha1").hexdigest()
 
 
-def compute_hashes(**kwargs):
+def compute_hashes(root, **kwargs):
     global files_to_handle
     files_to_handle = set(
-        [
-            f
-            for f in Path(".").glob("**/*")
-            if f.is_file() and not ignore_parser.match(f)
-        ]
+        [f for f in root.glob("**/*") if f.is_file() and not ignore_parser.match(f)]
     )
     n = len(files_to_handle)
-    print(f"    Number of files to handle: {n}")
+    _print(f"    Number of files to handle: {n}")
 
     for i, f in enumerate(files_to_handle):
         h = hash(f)
         hash_to_locations.setdefault(h, []).append(f)
-        print(f"    ({i+1}/{n}) Hash of {f} is {h}", end="\r")
+        _print(f"    ({i+1}/{n}) Hash of {f} is {h}", end="\r")
 
-    print("\n")
+    _print("\n")
 
 
 def automatic_choice(posibles_names):
@@ -106,12 +121,12 @@ def automatic_choice(posibles_names):
 def schedule_renaming(location, new_location):
     global renamings
     if new_location.exists() or new_location in renamings:
-        print(
+        _print(
             f"    The file '{new_location}' already exists with different content than '{location}'"
         )
-        print(f"    Keeping the file '{location}'")
+        _print(f"    Keeping the file '{location}'")
         return
-    print(f"    Renaming the file '{location}' -> '{new_location}'")
+    _print(f"    Renaming the file '{location}' -> '{new_location}'")
     renamings[new_location] = location
 
 
@@ -123,11 +138,11 @@ def ensure(path):
 def schedule_deletion(location):
     global deletions
     new_location = Path("Trash") / location
-    print(f"    Moving the file '{location}' to '{new_location}'")
+    _print(f"    Moving the file '{location}' to '{new_location}'")
     deletions[new_location] = location
 
 
-def handle_duplicates(choose_original_name=False, **kwargs):
+def handle_duplicates(root, choose_original_name=False, **kwargs):
     global files_to_handle, number_of_duplicates, renamings, deletions
 
     for hash, locations in hash_to_locations.items():
@@ -135,7 +150,7 @@ def handle_duplicates(choose_original_name=False, **kwargs):
         if len(locations) == 1:
             continue
 
-        print(f"> Hash {hash} has duplicates:\n")
+        _print(f"> Hash {hash} has duplicates:\n")
         number_of_duplicates += len(locations) - 1
         files_to_handle -= set(locations)
 
@@ -156,9 +171,9 @@ def handle_duplicates(choose_original_name=False, **kwargs):
 
         # If there are multiple possible names, we need to make a choice
         if any(posibles_names[0] != p for p in posibles_names):
-            print(f"  There are multiple posibles_names:")
+            _print(f"  There are multiple posibles_names:")
             for i, p in enumerate(posibles_names):
-                print(f"    {i+1} - {p}")
+                _print(f"    {i+1} - {p}")
 
             if choose_original_name:
                 while True:
@@ -173,19 +188,20 @@ def handle_duplicates(choose_original_name=False, **kwargs):
                         pass
             else:
                 choice = automatic_choice(posibles_names)
-            print()
+            _print()
 
         original = posibles_names[choice]
-        print(f"  Choosing the name '{original}' as the original name\n")
+        _print(f"  Choosing the name '{original}' as the original name\n")
 
         # We detect files with the same name
         name_to_locations = {}
         for location in locations:
             name = location.name
             if name in name_to_locations:
-                print(
+                _print(
                     f"  The file '{location}' has the same name as '{name_to_locations[name]}'\n"
                 )
+                # We keep the shortest name
                 if location < name_to_locations[name]:
                     schedule_deletion(name_to_locations[name])
                 else:
@@ -197,22 +213,22 @@ def handle_duplicates(choose_original_name=False, **kwargs):
         # When we have the original name, we check if the file already exists
         if original not in name_to_locations:
             location = name_to_locations.popitem()[1]
-            new_location = Path(original)
+            new_location = root / Path(original)
             schedule_renaming(location, new_location)
         else:
-            print(f"    Keeping the file '{name_to_locations[original]}'")
+            _print(f"    Keeping the file '{name_to_locations[original]}'")
             del name_to_locations[original]
 
         # Deleting all the other files
         for location in name_to_locations.values():
             schedule_deletion(location)
 
-        print()
+        _print()
 
 
 def shorten_names_of_other_files(**kwargs):
     global renamings, number_of_files_to_shorten
-    print("\n> Shortening names of other files...\n")
+    _print("\n> Shortening names of other files...\n")
 
     for f in files_to_handle:
         shorter_name = shorten_regex.shorten(f.name)
@@ -223,11 +239,11 @@ def shorten_names_of_other_files(**kwargs):
 
 
 def summarize(**kwargs):
-    print(f"\n> Summary:\n")
-    print(f"    Number of duplicates: {number_of_duplicates}")
-    print(f"    Number of files to shorten: {number_of_files_to_shorten}")
-    print(f"    Number of files to delete: {len(deletions)}")
-    print(f"    Number of files to rename: {len(renamings)}")
+    _print(f"\n> Summary:\n")
+    _print(f"    Number of duplicates: {number_of_duplicates}")
+    _print(f"    Number of files to shorten: {number_of_files_to_shorten}")
+    _print(f"    Number of files to delete: {len(deletions)}")
+    _print(f"    Number of files to rename: {len(renamings)}")
 
 
 def apply_changes(dry_run=False, confirm=True, **kwargs):
@@ -236,7 +252,7 @@ def apply_changes(dry_run=False, confirm=True, **kwargs):
 
     choice = "yes"
     while True and confirm:
-        print("\nAre you sure you want to continue (yes/NO)? ")
+        _print("\nAre you sure you want to continue (yes/NO)? ")
         choice = input().lower() or "no"
         if choice in ["yes", "no"]:
             break
@@ -254,7 +270,7 @@ def apply_changes(dry_run=False, confirm=True, **kwargs):
         old.rename(ensure(new))
         # location.unlink()
 
-    print("Files have been renamed and moved to trash")
+    _print("Files have been renamed and moved to trash")
 
 
 def quit(input_before_exit=True, **kwargs):
@@ -264,6 +280,14 @@ def quit(input_before_exit=True, **kwargs):
 
 
 def delete_duplicates(**config):
+    _print(f"\n> Looking for duplicate files in folder '{config['root']}' ...\n")
+
+    dry_run = config.get("dry_run", False)
+    if dry_run:
+        _print("    --- Dry run ---\n")
+
+    _print(f"    Suffixes: {suffixes}\n")
+
     compute_hashes(**config)
     handle_duplicates(**config)
     shorten_names_of_other_files(**config)
@@ -272,17 +296,18 @@ def delete_duplicates(**config):
 
 
 if __name__ == "__main__":
+    setup_logs()
+
     args = parser.parse_args()
-    print("\n> Looking for duplicate files...\n")
 
-    if args.dry_run:
-        print("    --- Dry run ---\n")
+    root = Path(args.directory)
 
-    if args.suffixes:
-        suffixes = args.suffixes
-        print(f"    Suffixes: {suffixes}\n")
+    if not root.exists():
+        _print(f"Error: The directory '{root}' doesn't exist")
+        quit()
 
     config = {
+        "root": root,
         "confirm": True,
         "dry_run": args.dry_run,
         "input_before_exit": not args.no_input_before_exit,

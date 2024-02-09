@@ -1,4 +1,4 @@
-# Doublons (1.0.0)
+# Doublons (1.0.1)
 
 This program finds duplicates files (hash-based) in a directory and removes them.
 For example, if you have the following files:
@@ -7,7 +7,7 @@ For example, if you have the following files:
 - test - Copie.txt
 - test (2).txt
 
-The program will remove the last two files if they have the same content as the first one.
+The program will remove (move to a `trash` folder to avoid loss of data) the last two files if they have the same content as the first one.
 
 It will also change the name of the files to remove the suffixes, for example:
 
@@ -21,7 +21,7 @@ Even if the files don't have duplicates.
 To run doublons in a specific directory from the installed poetry environment:
 
 ```bash
-poetry run doublons <directory>
+poetry run doublons.py <directory>
 ```
 
 There are instructions for how to install `doublons` in such an environment below.
@@ -57,23 +57,15 @@ poetry install
 I like to use `nuitka` to have a single `.exe` file I can send to non-tech-savvy friends.
 There is an example to compile to a single `.exe` file on `Windows` in the `build.sh` script.
 
-# Changelog (placeholder)
+# Changelog
 
-## x.x.x - 202x-month-day
-
-### Fixed
-
-- placeholder
-
-### Changed
-
-- placeholder
+## 1.0.1 - 2024-02-09
 
 ### Added
 
-- placeholder
+- Logs in `doublons.log`
 
 # TODOS
 
-- Check why version doesn't return the version from the `pyproject.toml`
-- Added a log file
+- Logs may no be perfect as they don't includes `input` prints and `user` input
+- It could be nice to undo the work of the program
