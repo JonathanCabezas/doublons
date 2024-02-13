@@ -7,11 +7,21 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-igittigitt = "^2.1.4"
+mio = {git = "git@github.com:JonathanCabezas/mio.git"}
 
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.0.0"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+  ".",
+  "doublons",
+]
+
+[tool.poetry.group.build.dependencies]
+nuitka = "^2.0.2"
 
 [build-system]
 requires = ["poetry-core"]

@@ -1,4 +1,4 @@
-# Doublons (1.0.1)
+# Doublons (1.0.2)
 
 This program finds duplicates files (hash-based) in a directory and removes them.
 For example, if you have the following files:
@@ -26,6 +26,15 @@ poetry run doublons.py <directory>
 
 There are instructions for how to install `doublons` in such an environment below.
 Try `poetry run doublons --help` for a list of all possible options.
+
+`Doublons` will run on files which match the pattern in the `whitelist` file and don't match the pattern in the `blacklist` file.
+
+# Whitelist/Blacklist syntax
+
+The syntax is based on the `.gitignore` format, with only 2 special characters implemented:
+
+- The `*` character means anything that is not a slash
+- The `**` can be any number of directories (even 0)
 
 # Installation
 
@@ -58,6 +67,16 @@ I like to use `nuitka` to have a single `.exe` file I can send to non-tech-savvy
 There is an example to compile to a single `.exe` file on `Windows` in the `build.sh` script.
 
 # Changelog
+
+## 1.0.2 - 2024-02-13
+
+### Added
+
+- Added a whitelist along with the blacklist for more control of which files are handled
+
+### Changed
+
+- Now using the library `Mio` to produce output and logs (which correctly logs tracebacks on Exceptions)
 
 ## 1.0.1 - 2024-02-09
 
